@@ -19,7 +19,9 @@
 package org.apache.felix.bundlerepository.impl;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 import org.apache.felix.bundlerepository.Capability;
@@ -106,8 +108,18 @@ public class RequirementImpl implements Requirement
 
     public boolean isSatisfied(Capability capability)
     {
-        return m_name.equals(capability.getName()) && m_filter.matchCase(capability.getPropertiesAsMap())
-                && (m_filter.toString().indexOf("(mandatory:<*") >= 0 || capability.getPropertiesAsMap().get("mandatory:") == null);
+        Map<String, Object> propertyMap = capability.getPropertiesAsMap();
+
+        // We are using a Filter that ignores case, so we need to modify the keys
+        Set<String> keySet = new HashSet<String>(propertyMap.keySet());
+        for (String key : keySet) {
+            Object object = propertyMap.remove(key);
+            propertyMap.put(key.toLowerCase(), object);
+        }
+
+        return m_name.equals(capability.getName()) &&
+                m_filter.matchCase(propertyMap) &&
+                (m_filter.toString().contains("(mandatory:<*") || propertyMap.get("mandatory:") == null);
     }
 
     public boolean isExtend()
