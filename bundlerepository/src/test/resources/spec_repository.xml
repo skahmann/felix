@@ -73,6 +73,10 @@
             <directive name="filter" value="(objectClass=org.some.interface)"/>
             <directive name="effective" value="active"/>
         </requirement>
+        <requirement namespace="osgi.service">
+            <directive name="filter" value="(objectClass=org.some.other.interface)"/>
+            <directive name="effective" value="active"/>
+        </requirement>
     </resource>
   <resource>
     <capability namespace='osgi.identity'>
