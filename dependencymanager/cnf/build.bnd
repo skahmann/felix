@@ -78,4 +78,4 @@ javac.target:          1.8
 # Removes some headers in order to reduce binary diff between same bundles that are not changed between subsequent releases.
 # see FELIX-4915
 #
--removeheaders: Bnd-LastModified,Tool,Created-By
+-removeheaders: Bnd-LastModified,Tool,Created-By,Include-Resource

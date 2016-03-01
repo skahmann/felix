@@ -107,6 +107,8 @@ public class DataModelHelperTest extends TestCase
                 osgiServiceCap = capability;
             } else if (capability.getName().equals("package")) {
                 osgiPackageCap = capability;
+            } else {
+                osgiServiceCap = capability;
             }
         }
 

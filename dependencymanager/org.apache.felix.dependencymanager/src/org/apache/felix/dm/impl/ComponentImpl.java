@@ -556,10 +556,10 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
         // (Aspect or Adapter are not interested in user dependency callbacks)        
         if (logIfNotFound && ! callbackFound && ! (getInstance() instanceof AbstractDecorator)) {
             if (m_logger == null) {
-                System.out.println("Callback \"" + methodName + "\" not found on componnent instances "
+                System.out.println("\"" + methodName + "\" callback not found on componnent instances "
                     + Arrays.toString(getInstances()));
             } else {
-                m_logger.log(LogService.LOG_ERROR, "Callback \"" + methodName + "\" callback not found on componnent instances "
+                m_logger.log(LogService.LOG_ERROR, "\"" + methodName + "\" callback not found on componnent instances "
                     + Arrays.toString(getInstances()));
             }
 
@@ -702,6 +702,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
     public String getName() {
         StringBuffer sb = new StringBuffer();
         Object serviceName = m_serviceName;
+        // If the component provides service(s), return the services as the component name.
         if (serviceName instanceof String[]) {
             String[] names = (String[]) serviceName;
             for (int i = 0; i < names.length; i++) {
@@ -715,30 +716,48 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
             sb.append(serviceName.toString());
             appendProperties(sb);
         } else {
-            Object implementation = m_componentDefinition;
-            if (implementation != null) {
-                if (implementation instanceof Class) {
-                    sb.append(((Class<?>) implementation).getName());
+            // The component does not provide a service, use the component definition as the name.
+            Object componentDefinition = m_componentDefinition;
+            if (componentDefinition != null) {
+                sb.append(toString(componentDefinition));
+            } else { 
+                // No component definition means we are using a factory. If the component instance is available use it as the component name,
+                // alse use teh factory object as the component name.
+                Object componentInstance = m_componentInstance;
+                if (componentInstance != null) {
+                    sb.append(componentInstance.getClass().getName());
                 } else {
-                    // If the implementation instance does not override "toString", just display
-                    // the class name, else display the component using its toString method
-                    try {
-                    Method m = implementation.getClass().getMethod("toString", new Class[0]);
-                        if (m.getDeclaringClass().equals(Object.class)) {
-                            sb.append(implementation.getClass().getName());
-                        } else {
-                            sb.append(implementation.toString());
-                        }
-                    }  catch (java.lang.NoSuchMethodException e) {
-                        // Just display the class name
-                        sb.append(implementation.getClass().getName());
+                    // Check if a factory is set.
+                    Object instanceFactory = m_instanceFactory;
+                    if (instanceFactory != null) {
+                        sb.append(toString(instanceFactory));
+                    } else {
+                        sb.append(super.toString());
                     }
                 }
-            } else {
-                sb.append(super.toString());
             }
         }
         return sb.toString();
+    }
+    
+    private String toString(Object implementation) {
+        if (implementation instanceof Class) {
+            return (((Class<?>) implementation).getName());
+        } else {
+            // If the implementation instance does not override "toString", just display
+            // the class name, else display the component using its toString method
+            try {
+            Method m = implementation.getClass().getMethod("toString", new Class[0]);
+                if (m.getDeclaringClass().equals(Object.class)) {
+                    return implementation.getClass().getName();
+                } else {
+                    return implementation.toString();
+                }
+            }  catch (java.lang.NoSuchMethodException e) {
+                // Just display the class name
+                return implementation.getClass().getName();
+            }
+        }
     }
     
     @Override
@@ -771,7 +790,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
         
         Object instanceFactory = m_instanceFactory;
         if (instanceFactory != null) {
-            return instanceFactory.getClass().getName();
+            return toString(instanceFactory);
         } else {
             // unexpected.
             return ComponentImpl.class.getName();
