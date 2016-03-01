@@ -232,9 +232,7 @@ public class ScenarioControllerImpl implements Runnable, ScenarioController {
     private void forEachScenarioBundle(List<String> tests, Consumer<Bundle> consumer) {
         tests.stream().forEach(test -> {
             Optional<Bundle> bundle = Stream.of(m_bctx.getBundles()).filter(b -> b.getSymbolicName().equals(test)).findFirst();
-            bundle.ifPresent(b -> {
-                consumer.accept(b);
-            });
+            bundle.ifPresent(consumer::accept);
         });   
     }
     
@@ -298,17 +296,6 @@ public class ScenarioControllerImpl implements Runnable, ScenarioController {
         }
     }
     
-    /**
-     * Initialize the latches used to track when all scenario bundle components are started or stopped.
-     */
-    private void initLatches() {
-        m_startLatch = new CountDownLatch(ARTISTS
-            + (ARTISTS * (ALBUMS + (ALBUMS * TRACKS))));
-        
-        m_stopLatch = new CountDownLatch(ARTISTS
-            + (ARTISTS * (ALBUMS + (ALBUMS * TRACKS))));
-    }
-
     /**
      * Returns the time consumed by the given runnable, ²ch is executed by this method.
      */

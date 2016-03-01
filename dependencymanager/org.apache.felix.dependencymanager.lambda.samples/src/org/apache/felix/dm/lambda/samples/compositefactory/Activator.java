@@ -20,27 +20,30 @@ package org.apache.felix.dm.lambda.samples.compositefactory;
 
 import static java.lang.System.out;
 
+import org.apache.felix.dm.DependencyManager;
 import org.apache.felix.dm.lambda.DependencyManagerActivator;
+import org.osgi.framework.BundleContext;
 import org.osgi.service.cm.ConfigurationAdmin;
 import org.osgi.service.log.LogService;
 
 /**
  * Creates a "Provider" service. The implementation for this service (ProviderImpl) is
  * created using a factory class (ProviderFactory) that also creates some other helper classes 
- * (ProviderComposite1 and ProviderComposite2) that are internally used by ProviderImpl.
+ * that are internally used by ProviderImpl (ProviderComposite1 and ProviderComposite2).
  * 
  * The ProviderFactory is also injected with a Configuration that can be used by the Factory
  * when creating the ProviderImpl, ProviderComposite1, and ProviderComposite2 classes.
  * 
  * The LogService in only injected to the ProviderImpl and the ProviderComposite1 classes.
- * Both composites are called in their "start" callbacks, when all required dependencies are available.
+ * objects being part of the composition are called in "start" lifecycle callback when all 
+ * required dependencies are available.
  * 
  * @author <a href="mailto:dev@felix.apache.org">Felix Project Team</a>
  */
 public class Activator extends DependencyManagerActivator {
     @Override
-    public void activate() throws Exception {
-    	out.println("type \"log info\" to see the logs emitted by this test.");
+    public void init(BundleContext ctx, DependencyManager dm) throws Exception {
+    	out.println("type \"log warn\" to see the logs emitted by this test.");
 
     	// Create the Factory used to instantiate ProvuderImpl, ProviderComposite1 and ProviderComposite2
         ProviderFactory factory = new ProviderFactory();
@@ -51,13 +54,10 @@ public class Activator extends DependencyManagerActivator {
         // before creating the composition of classes.
         component(comp -> comp
             .factory(factory::create, factory::getComposition)
-            .start(ProviderImpl::start) // only call start on ProviderImpl          
-            .withSrv(LogService.class, srv -> srv.cb(ProviderImpl::bind).cb(ProviderComposite1::bind))
-            .withCnf(conf -> conf.pid(ProviderFactory.class).cbi(factory::updated)));
+            .withSvc(LogService.class, svc -> svc.required().add(ProviderImpl::bind).add(ProviderComposite1::bind))
+            .withCnf(conf -> conf.update(MyConfig.class, factory::updated)));
                 
         // Creates a configuration with pid name = "org.apache.felix.dependencymanager.lambda.samples.compositefactory.ProviderFactory"
-        component(comp -> comp
-            .impl(Configurator.class)
-            .withSrv(ConfigurationAdmin.class));
-    }
+        component(comp -> comp.impl(Configurator.class).withSvc(ConfigurationAdmin.class, true));
+    }    
 }

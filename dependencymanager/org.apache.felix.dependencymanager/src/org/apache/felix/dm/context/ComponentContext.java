@@ -18,6 +18,7 @@
  */
 package org.apache.felix.dm.context;
 
+import java.util.Dictionary;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Executor;
@@ -114,13 +115,23 @@ public interface ComponentContext extends Component {
     public List<DependencyContext> getDependencies();
     
     /**
-     * Invoke a component callback method with a given dependency service instance
+     * Invokes a callback method on a given set of objects. An error is logged if the callback is not found in any of the object instances.
      * @param instances the component instances
      * @param methodName the method name
      * @param signatures the method signatures (types)
      * @param parameters the method parameters
      */
     public void invokeCallbackMethod(Object[] instances, String methodName, Class<?>[][] signatures, Object[][] parameters);
+    
+    /**
+     * Invokes a callback method on a given set of objects.
+     * @param instances the component instances
+     * @param methodName the method name
+     * @param signatures the method signatures (types)
+     * @param parameters the method parameters
+     * @param logIfNotFound true if a warning message should be logged in case the callback is not found in any of the object instances.
+     */
+    public void invokeCallbackMethod(Object[] instances, String methodName, Class<?>[][] signatures, Object[][] parameters, boolean logIfNotFound);
     
     /**
      * Returns the component instances
@@ -156,4 +167,15 @@ public interface ComponentContext extends Component {
      * @return all the available dependency services for a given dependency
      */
     public Set<Event> getDependencyEvents(DependencyContext dc);
+    
+    /**
+     * Creates a configuration for a given type backed by a given dictionary.
+     * This method can be used by any custom Dependency Manager dependency that
+     * needs to expose some configuration through a dynamic proxy interface.
+     * 
+     * @param type the configuration class, cannot be <code>null</code>;
+     * @param config the configuration to wrap, cannot be <code>null</code>.
+     * @return an instance of the given type that wraps the given configuration.
+     */
+    public <T> T createConfigurationType(Class<T> type, Dictionary<?, ?> config);
 }

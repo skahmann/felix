@@ -67,6 +67,11 @@ public class FilterComponent implements Component, ComponentContext, ComponentDe
     }
     
     @Override
+    public <T> T createConfigurationType(Class<T> type, Dictionary<?, ?> config) {
+        return m_component.createConfigurationType(type, config);
+    }
+    
+    @Override
     public Executor getExecutor() {
         return m_component.getExecutor();
     }
@@ -245,7 +250,11 @@ public class FilterComponent implements Component, ComponentContext, ComponentDe
     public void invokeCallbackMethod(Object[] instances, String methodName, Class<?>[][] signatures, Object[][] parameters) {
         m_component.invokeCallbackMethod(instances, methodName, signatures, parameters);
     }
-        
+    
+    public void invokeCallbackMethod(Object[] instances, String methodName, Class<?>[][] signatures, Object[][] parameters, boolean logIfNotFound) {
+        m_component.invokeCallbackMethod(instances, methodName, signatures, parameters, logIfNotFound);
+    }
+            
     public DependencyManager getDependencyManager() {
         return m_component.getDependencyManager();
     }

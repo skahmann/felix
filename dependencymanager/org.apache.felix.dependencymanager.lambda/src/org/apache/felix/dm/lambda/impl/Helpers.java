@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.felix.dm.lambda.impl;
 
 import java.lang.invoke.SerializedLambda;
@@ -12,14 +30,17 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import org.apache.felix.dm.Component;
+import org.apache.felix.dm.context.ComponentContext;
 import org.apache.felix.dm.lambda.callbacks.SerializableLambda;
+import org.osgi.framework.BundleContext;
 
 /**
  * Various helper methods related to generics and lambda expressions.
  */
 public class Helpers {
 	private final static Pattern LAMBDA_INSTANCE_METHOD_TYPE = Pattern.compile("(L[^;]+)+");
-
+	private final static String DEFAULT_REQUIRED_DEPENDENCY = "org.apache.felix.dependencymanager.lambda.defaultRequiredDependency";
+	
 	/**
 	 * Gets the class name of a given object.
 	 * @param obj the object whose class has to be returned.
@@ -111,6 +132,29 @@ public class Helpers {
     }
 
     /**
+     * Is a dependency required by default ?
+     * 
+     * @param c the component on which the dependency is added
+     * @param ctx the bundle context
+     * @return true if the dependency is required by default, false if not
+     */
+    public static boolean isDependencyRequiredByDefault(Component c) {
+        BundleContext ctx = ((ComponentContext) c).getBundleContext();
+        String defaultRequiredDependency = ctx.getProperty(DEFAULT_REQUIRED_DEPENDENCY);
+        if (defaultRequiredDependency != null) {
+            defaultRequiredDependency = defaultRequiredDependency.trim();
+            String componentName = c.getComponentDeclaration().getClassName();
+            for (String pkg : defaultRequiredDependency.split(",")) {
+                if (componentName.startsWith(pkg)) {
+                    return true;
+                }
+            }            
+        }        
+        
+        return false;
+    }
+    
+    /**
      * Extracts the actual types of all lambda generic parameters.
      * Example: for "BiConsumer<String, Integer>", this method returns ["java.lang.String", "java.lang.Integer"].
      */
@@ -143,5 +187,5 @@ public class Helpers {
             .findFirst()
             .orElseThrow(() -> new RuntimeException("Lambda Method not found"));
     }
-    
+
 }

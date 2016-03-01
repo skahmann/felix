@@ -68,6 +68,7 @@ public final class HttpServiceFactory
     /** Compatibility property with previous versions. */
     private static final String OBSOLETE_REG_PROPERTY_ENDPOINTS = "osgi.http.service.endpoints";
 
+    private volatile boolean active = false;
     private final BundleContext bundleContext;
     private final boolean sharedContextAttributes;
 
@@ -111,10 +112,14 @@ public final class HttpServiceFactory
 
         final String[] ifaces = new String[] { HttpService.class.getName(), ExtHttpService.class.getName() };
         this.httpServiceReg = bundleContext.registerService(ifaces, this, this.httpServiceProps);
+
+        this.active = true;
     }
 
     public void stop()
     {
+        this.active = false;
+
         if ( this.httpServiceReg != null )
         {
             this.httpServiceReg.unregister();
@@ -134,15 +139,27 @@ public final class HttpServiceFactory
     @Override
     public HttpService getService(final Bundle bundle, final ServiceRegistration<HttpService> reg)
     {
-        final ServletContext servletContext = this.context;
-        if ( servletContext != null ) {
-            return new PerBundleHttpServiceImpl(bundle,
-                    this.sharedHttpService,
-                    this.context,
-                    this.contextAttributeListenerManager,
-                    this.sharedContextAttributes,
-                    this.requestListenerManager,
-                    this.requestAttributeListenerManager);
+        // Only return a service after start() has been called.
+        if (active) {
+            // Store everything that we want to pass to the PerBundleHttpServiceImpl in local vars to avoid
+            // a race condition where the service might be stopped while this method is executing.
+            SharedHttpServiceImpl sharedHttpSvc = this.sharedHttpService;
+            ServletContext servletCtx = this.context;
+            ServletContextAttributeListenerManager servletCtxAttrListenerMgr = this.contextAttributeListenerManager;
+            boolean sharedCtxAttrs = this.sharedContextAttributes;
+            ServletRequestListenerManager reqListenerMgr = this.requestListenerManager;
+            ServletRequestAttributeListenerManager reqAttrListenerMgr = this.requestAttributeListenerManager;
+
+            if ( active ) {
+                // Only return the service if we're still active
+                return new PerBundleHttpServiceImpl(bundle,
+                        sharedHttpSvc,
+                        servletCtx,
+                        servletCtxAttrListenerMgr,
+                        sharedCtxAttrs,
+                        reqListenerMgr,
+                        reqAttrListenerMgr);
+            }
         }
         return null;
     }

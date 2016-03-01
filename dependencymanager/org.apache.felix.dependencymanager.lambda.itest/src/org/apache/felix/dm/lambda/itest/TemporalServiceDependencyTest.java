@@ -18,6 +18,7 @@
  */
 package org.apache.felix.dm.lambda.itest;
 
+import static org.apache.felix.dm.lambda.DependencyManagerActivator.adapter;
 import static org.apache.felix.dm.lambda.DependencyManagerActivator.component;
 import static org.apache.felix.dm.lambda.DependencyManagerActivator.serviceDependency;
 
@@ -34,7 +35,6 @@ import org.junit.Assert;
 @SuppressWarnings({"unchecked", "rawtypes", "serial"})
 public class TemporalServiceDependencyTest extends TestBase {
     public void testServiceConsumptionAndIntermittentAvailability() {
-        if (true) return;
         final DependencyManager m = getDM();
         // helper class that ensures certain steps get executed in sequence
         Ensure e = new Ensure();
@@ -44,7 +44,7 @@ public class TemporalServiceDependencyTest extends TestBase {
         TemporalServiceProvider2 provider2 = new TemporalServiceProvider2(e);
         Component sp2 = component(m).impl(provider2).provides(TemporalServiceInterface.class.getName()).build();
         TemporalServiceConsumer consumer = new TemporalServiceConsumer(e);
-        Component sc = component(m).impl(consumer).withSrv(TemporalServiceInterface.class, s->s.timeout(10000)).build();
+        Component sc = component(m).impl(consumer).withSvc(TemporalServiceInterface.class, s->s.timeout(10000)).build();
         // add the service consumer
         m.add(sc);
         // now add the first provider
@@ -66,7 +66,6 @@ public class TemporalServiceDependencyTest extends TestBase {
     }
 
     public void testServiceConsumptionWithCallbackAndIntermittentAvailability() {
-        if (true) return;
         final DependencyManager m = getDM();
         // helper class that ensures certain steps get executed in sequence
         Ensure e = new Ensure();
@@ -76,7 +75,7 @@ public class TemporalServiceDependencyTest extends TestBase {
         TemporalServiceProvider2 provider2 = new TemporalServiceProvider2(e);
         Component sp2 = component(m).impl(provider2).provides(TemporalServiceInterface.class.getName()).build();
         TemporalServiceConsumerWithCallback consumer = new TemporalServiceConsumerWithCallback(e);
-        Component sc = component(m).impl(consumer).withSrv(TemporalServiceInterface.class, srv->srv.cb("add", "remove").timeout(10000)).build();
+        Component sc = component(m).impl(consumer).withSvc(TemporalServiceInterface.class, srv->srv.add("add").remove("remove").timeout(10000)).build();
             
         // add the service consumer
         m.add(sc);
@@ -103,7 +102,6 @@ public class TemporalServiceDependencyTest extends TestBase {
     // Same test as testServiceConsumptionWithCallbackAndIntermittentAvailability, but the consumer is now
     // an adapter for the Adaptee interface.
     public void testFELIX4858_ServiceAdapterConsumptionWithCallbackAndIntermittentAvailability() {
-        if (true) return;
         final DependencyManager m = getDM();
         // helper class that ensures certain steps get executed in sequence
         Ensure e = new Ensure();
@@ -113,8 +111,8 @@ public class TemporalServiceDependencyTest extends TestBase {
         TemporalServiceProvider2 provider2 = new TemporalServiceProvider2(e);
         Component sp2 = component(m).impl(provider2).provides(TemporalServiceInterface.class.getName()).build();
         TemporalServiceConsumerAdapterWithCallback consumer = new TemporalServiceConsumerAdapterWithCallback(e);
-        Component sc = m.createAdapterService(Adaptee.class, null).setImplementation(consumer);
-        ServiceDependency temporalDep = serviceDependency(sc, TemporalServiceInterface.class).timeout(10000).cb("add", "remove").build();
+        Component sc = adapter(m, Adaptee.class).impl(consumer).build();
+        ServiceDependency temporalDep = serviceDependency(sc, TemporalServiceInterface.class).timeout(10000).add("add").remove("remove").build();
         sc.add(temporalDep);
         Component adaptee = component(m).impl(new Adaptee()).provides(Adaptee.class.getName()).build();
             
@@ -143,7 +141,6 @@ public class TemporalServiceDependencyTest extends TestBase {
     }
 
     public void testFelix4602_PropagateServiceInvocationException() {
-        if (true) return;
         final DependencyManager m = getDM();
         final Ensure ensure = new Ensure();
         Runnable provider = new Runnable() {
@@ -171,7 +168,7 @@ public class TemporalServiceDependencyTest extends TestBase {
         };
         Component consumerComp = component(m)
         		.impl(consumer)
-        		.withSrv(Runnable.class, s->s.timeout(5000).filter("(target=" + getClass().getSimpleName() + ")")).build();
+        		.withSvc(Runnable.class, s->s.timeout(5000).filter("(target=" + getClass().getSimpleName() + ")")).build();
         m.add(consumerComp);
         m.add(providerComp);
         ensure.waitForStep(2, 5000);

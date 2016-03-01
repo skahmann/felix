@@ -139,7 +139,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
     /**
      * The object used to create the component. Can be a class name, or the component implementation instance.
      */
-    private Object m_componentDefinition;
+    private volatile Object m_componentDefinition;
     
     /**
      * The component instance.
@@ -341,6 +341,11 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
     }
 
     @Override
+    public <T> T createConfigurationType(Class<T> type, Dictionary<?, ?> config) {
+        return Configurable.create(type,  config);
+    }
+    
+    @Override
     public Executor getExecutor() {
         return m_executor;
     }
@@ -355,49 +360,42 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
 
 	@Override
 	public Component add(final Dependency ... dependencies) {
-		getExecutor().execute(new Runnable() {
-			@Override
-			public void run() {
-				List<DependencyContext> instanceBoundDeps = new ArrayList<>();
-				for (Dependency d : dependencies) {
-					DependencyContext dc = (DependencyContext) d;
-					if (dc.getComponentContext() != null) {
-                        m_logger.err("%s can't be added to %s (dependency already added to another component).", dc,
-                            ComponentImpl.this);
-                        continue;
-					}
-					m_dependencyEvents.put(dc,  new ConcurrentSkipListSet<Event>());
-					m_dependencies.add(dc);
-					dc.setComponentContext(ComponentImpl.this);
-					if (!(m_state == ComponentState.INACTIVE)) {
-						dc.setInstanceBound(true);
-						instanceBoundDeps.add(dc);
-					}
-				}
-				startDependencies(instanceBoundDeps);
-				handleChange();
-			}
+		getExecutor().execute(() -> {
+            List<DependencyContext> instanceBoundDeps = new ArrayList<>();
+            for (Dependency d : dependencies) {
+                DependencyContext dc = (DependencyContext) d;
+                if (dc.getComponentContext() != null) {
+                    m_logger.err("%s can't be added to %s (dependency already added to another component).", dc, ComponentImpl.this);
+                    continue;
+                }
+                m_dependencyEvents.put(dc, new ConcurrentSkipListSet<Event>());
+                m_dependencies.add(dc);
+                dc.setComponentContext(ComponentImpl.this);
+                if (!(m_state == ComponentState.INACTIVE)) {
+                    dc.setInstanceBound(true);
+                    instanceBoundDeps.add(dc);
+                }
+            }
+            startDependencies(instanceBoundDeps);
+            handleChange();
 		});
 		return this;
 	}
 
 	@Override
 	public Component remove(final Dependency d) {
-		getExecutor().execute(new Runnable() {
-			@Override
-			public void run() {
-				DependencyContext dc = (DependencyContext) d;
-				// First remove this dependency from the dependency list
-                m_dependencies.remove(d);
-                // Now we can stop the dependency (our component won't be deactivated, it will only be unbound with
-                // the removed dependency).
-				if (!(m_state == ComponentState.INACTIVE)) {
-					dc.stop();
-				}
-				// Finally, cleanup the dependency events.
-                m_dependencyEvents.remove(d);
-				handleChange();
-			}
+		getExecutor().execute(() -> {
+		    DependencyContext dc = (DependencyContext) d;
+		    // First remove this dependency from the dependency list
+		    m_dependencies.remove(d);
+		    // Now we can stop the dependency (our component won't be deactivated, it will only be unbound with
+		    // the removed dependency).
+		    if (!(m_state == ComponentState.INACTIVE)) {
+		        dc.stop();
+		    }
+		    // Finally, cleanup the dependency events.
+		    m_dependencyEvents.remove(d);
+		    handleChange();
 		});
 		return this;
 	}
@@ -405,12 +403,9 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
 	@Override
 	public void start() {
 	    if (m_active.compareAndSet(false, true)) {
-            getExecutor().execute(new Runnable() {
-                @Override
-                public void run() {
-                    m_isStarted = true;
-                    handleChange();
-                }
+            getExecutor().execute(() -> {
+                m_isStarted = true;
+                handleChange();
             });
 	    }
 	}
@@ -421,13 +416,10 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
 	        Executor executor = getExecutor();
 
 	        // First, declare the task that will stop our component in our executor.
-	        final Runnable stopTask = new Runnable() {
-                @Override
-                public void run() {
-                	m_isStarted = false;
-                	handleChange();
-                }
-            };
+	        final Runnable stopTask = () -> {
+	            m_isStarted = false;
+	            handleChange();
+	        };
             
             // Now, we have to schedule our stopTask in our component executor. But we have to handle a special case:
             // if the component bundle is stopping *AND* if the executor is a parallel dispatcher, then we want 
@@ -467,9 +459,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
         // since this method can be invoked by anyone from any thread, we need to
         // pass on the event to a runnable that we execute using the component's
         // executor
-        getExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
+        getExecutor().execute(() -> {
                 try {
                     switch (type) {
                     case ADDED:
@@ -490,8 +480,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
                 	// (See FELIX-4913).
                     clearInvokeCallbackCache();
                 }
-            }
-        });
+            });        
 	}
 
     @Override
@@ -567,10 +556,10 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
         // (Aspect or Adapter are not interested in user dependency callbacks)        
         if (logIfNotFound && ! callbackFound && ! (getInstance() instanceof AbstractDecorator)) {
             if (m_logger == null) {
-                System.out.println("Callback \"" + methodName + "\" not found on componnent instances "
+                System.out.println("\"" + methodName + "\" callback not found on componnent instances "
                     + Arrays.toString(getInstances()));
             } else {
-                m_logger.log(LogService.LOG_ERROR, "Callback \"" + methodName + "\" callback not found on componnent instances "
+                m_logger.log(LogService.LOG_ERROR, "\"" + methodName + "\" callback not found on componnent instances "
                     + Arrays.toString(getInstances()));
             }
 
@@ -631,15 +620,12 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
     @Override
     @SuppressWarnings("unchecked")
     public Component setServiceProperties(final Dictionary<?, ?> serviceProperties) {
-        getExecutor().execute(new Runnable() {
-            @Override
-            public void run() {
-                Dictionary<Object, Object> properties = null;
-                m_serviceProperties = (Dictionary<Object, Object>) serviceProperties;
-                if ((m_registration != null) && (m_serviceName != null)) {
-                    properties = calculateServiceProperties();
-                    m_registration.setProperties(properties);
-                }
+        getExecutor().execute(() -> {
+            Dictionary<Object, Object> properties = null;
+            m_serviceProperties = (Dictionary<Object, Object>) serviceProperties;
+            if ((m_registration != null) && (m_serviceName != null)) {
+                properties = calculateServiceProperties();
+                m_registration.setProperties(properties);
             }
         });
         return this;
@@ -716,6 +702,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
     public String getName() {
         StringBuffer sb = new StringBuffer();
         Object serviceName = m_serviceName;
+        // If the component provides service(s), return the services as the component name.
         if (serviceName instanceof String[]) {
             String[] names = (String[]) serviceName;
             for (int i = 0; i < names.length; i++) {
@@ -729,30 +716,48 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
             sb.append(serviceName.toString());
             appendProperties(sb);
         } else {
-            Object implementation = m_componentDefinition;
-            if (implementation != null) {
-                if (implementation instanceof Class) {
-                    sb.append(((Class<?>) implementation).getName());
+            // The component does not provide a service, use the component definition as the name.
+            Object componentDefinition = m_componentDefinition;
+            if (componentDefinition != null) {
+                sb.append(toString(componentDefinition));
+            } else { 
+                // No component definition means we are using a factory. If the component instance is available use it as the component name,
+                // alse use teh factory object as the component name.
+                Object componentInstance = m_componentInstance;
+                if (componentInstance != null) {
+                    sb.append(componentInstance.getClass().getName());
                 } else {
-                    // If the implementation instance does not override "toString", just display
-                    // the class name, else display the component using its toString method
-                    try {
-                    Method m = implementation.getClass().getMethod("toString", new Class[0]);
-                        if (m.getDeclaringClass().equals(Object.class)) {
-                            sb.append(implementation.getClass().getName());
-                        } else {
-                            sb.append(implementation.toString());
-                        }
-                    }  catch (java.lang.NoSuchMethodException e) {
-                        // Just display the class name
-                        sb.append(implementation.getClass().getName());
+                    // Check if a factory is set.
+                    Object instanceFactory = m_instanceFactory;
+                    if (instanceFactory != null) {
+                        sb.append(toString(instanceFactory));
+                    } else {
+                        sb.append(super.toString());
                     }
                 }
-            } else {
-                sb.append(super.toString());
             }
         }
         return sb.toString();
+    }
+    
+    private String toString(Object implementation) {
+        if (implementation instanceof Class) {
+            return (((Class<?>) implementation).getName());
+        } else {
+            // If the implementation instance does not override "toString", just display
+            // the class name, else display the component using its toString method
+            try {
+            Method m = implementation.getClass().getMethod("toString", new Class[0]);
+                if (m.getDeclaringClass().equals(Object.class)) {
+                    return implementation.getClass().getName();
+                } else {
+                    return implementation.toString();
+                }
+            }  catch (java.lang.NoSuchMethodException e) {
+                // Just display the class name
+                return implementation.getClass().getName();
+            }
+        }
     }
     
     @Override
@@ -785,7 +790,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
         
         Object instanceFactory = m_instanceFactory;
         if (instanceFactory != null) {
-            return instanceFactory.getClass().getName();
+            return toString(instanceFactory);
         } else {
             // unexpected.
             return ComponentImpl.class.getName();
@@ -1444,7 +1449,7 @@ public class ComponentImpl implements Component, ComponentContext, ComponentDecl
 		    // (in fact, we do this because extra dependencies (added by user) may contain a callback instance, and we really don't want to invoke the callbacks twice !		    
 		    Object mainComponentImpl = getInstance();
 		    if (mainComponentImpl instanceof AbstractDecorator) {
-		        if (mainComponentImpl instanceof FactoryConfigurationAdapterImpl || dc != m_dependencies.get(0)) {
+		        if (mainComponentImpl instanceof FactoryConfigurationAdapterImpl.AdapterImpl || dc != m_dependencies.get(0)) {
 		            return;
 		        }
 		    }

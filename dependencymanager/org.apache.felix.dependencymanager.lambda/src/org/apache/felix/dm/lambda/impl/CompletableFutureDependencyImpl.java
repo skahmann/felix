@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.felix.dm.lambda.impl;
 
 import java.util.ArrayList;
@@ -14,7 +32,7 @@ import org.apache.felix.dm.context.Event;
 import org.apache.felix.dm.context.EventType;
 import org.apache.felix.dm.lambda.FutureDependencyBuilder;
 import org.apache.felix.dm.lambda.callbacks.CbFuture;
-import org.apache.felix.dm.lambda.callbacks.CbTypeFuture;
+import org.apache.felix.dm.lambda.callbacks.InstanceCbFuture;
 import org.osgi.service.log.LogService;
 
 public class CompletableFutureDependencyImpl<F> extends AbstractDependency<CompletableFutureDependencyImpl<F>> implements FutureDependencyBuilder<F> {
@@ -23,8 +41,8 @@ public class CompletableFutureDependencyImpl<F> extends AbstractDependency<Compl
 	private Component m_comp;
 	private boolean m_async;
 	private Executor m_exec;
-    private CbFuture<F> m_accept = (future) -> {};
-    private CbTypeFuture<Object, F> m_accept2;
+    private InstanceCbFuture<F> m_accept = (future) -> {};
+    private CbFuture<Object, F> m_accept2;
     private Class<?> m_accept2Type;
     
 	public CompletableFutureDependencyImpl(Component c, CompletableFuture<F> future) {
@@ -51,24 +69,24 @@ public class CompletableFutureDependencyImpl<F> extends AbstractDependency<Compl
 	}
 
 	@Override
-    public FutureDependencyBuilder<F> cb(String callback) {
-	    return cbi(null, callback);
+    public FutureDependencyBuilder<F> complete(String callback) {
+	    return complete(null, callback);
 	}
 	
 	@Override
-    public FutureDependencyBuilder<F> cbi(Object callbackInstance, String callback) {
+    public FutureDependencyBuilder<F> complete(Object callbackInstance, String callback) {
 	    super.setCallbacks(callbackInstance, callback, null);
 	    return this;
 	}
 
 	@Override
-	public <T> FutureDependencyBuilder<F> cb(CbTypeFuture<T, ? super F> consumer) {
-	    return cb(consumer, false);
+	public <T> FutureDependencyBuilder<F> complete(CbFuture<T, ? super F> consumer) {
+	    return complete(consumer, false);
 	}
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public <T> FutureDependencyBuilder<F> cb(CbTypeFuture<T, ? super F> consumer, boolean async) {
+	public <T> FutureDependencyBuilder<F> complete(CbFuture<T, ? super F> consumer, boolean async) {
 	    m_accept2Type = Helpers.getLambdaArgType(consumer, 0);;
 	    m_accept2 = (instance, result) -> consumer.accept((T) instance, result);
 	    m_async = async;
@@ -76,28 +94,28 @@ public class CompletableFutureDependencyImpl<F> extends AbstractDependency<Compl
 	}   
 
 	@Override
-	public <T> FutureDependencyBuilder<F> cb(CbTypeFuture<T, ? super F> consumer, Executor executor) {
-	    cb(consumer, true /* async */);
+	public <T> FutureDependencyBuilder<F> complete(CbFuture<T, ? super F> consumer, Executor executor) {
+	    complete(consumer, true /* async */);
 	    m_exec = executor;
 	    return this;
 	}
 
 	@Override
-	public FutureDependencyBuilder<F> cbi(CbFuture<? super F> consumer) {
-	    cbi(consumer, false);
+	public FutureDependencyBuilder<F> complete(InstanceCbFuture<? super F> consumer) {
+	    complete(consumer, false);
 		return this;
 	}
 	
 	@Override
-	public FutureDependencyBuilder<F> cbi(CbFuture<? super F> consumer, boolean async) {
+	public FutureDependencyBuilder<F> complete(InstanceCbFuture<? super F> consumer, boolean async) {
 	    m_accept = m_accept.andThen(future -> consumer.accept(future));
 	    m_async = async;
 	    return this;
 	}   
 
     @Override
-    public FutureDependencyBuilder<F> cbi(CbFuture<? super F> consumer, Executor executor) {
-        cbi(consumer, true /* async */);
+    public FutureDependencyBuilder<F> complete(InstanceCbFuture<? super F> consumer, Executor executor) {
+        complete(consumer, true /* async */);
         m_exec = executor;
         return this;
     }
@@ -212,7 +230,7 @@ public class CompletableFutureDependencyImpl<F> extends AbstractDependency<Compl
 	}
     
     /**
-     * Injects the completed fiture result in a method by reflection.
+     * Injects the completed future result in a method by reflection.
      * We try to find a method which has in its signature a parameter that is compatible with the future result
      * (including any interfaces the result may implements).
      * 

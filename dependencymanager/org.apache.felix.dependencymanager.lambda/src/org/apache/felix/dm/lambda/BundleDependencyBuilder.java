@@ -1,28 +1,45 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.felix.dm.lambda;
 
 import java.util.Dictionary;
-import java.util.function.Supplier;
+import java.util.function.Function;
 
 import org.apache.felix.dm.BundleDependency;
 import org.apache.felix.dm.lambda.callbacks.CbBundle;
-import org.apache.felix.dm.lambda.callbacks.CbComponentBundle;
-import org.apache.felix.dm.lambda.callbacks.CbTypeBundle;
-import org.apache.felix.dm.lambda.callbacks.CbTypeComponentBundle;
+import org.apache.felix.dm.lambda.callbacks.CbBundleComponent;
+import org.apache.felix.dm.lambda.callbacks.InstanceCbBundle;
+import org.apache.felix.dm.lambda.callbacks.InstanceCbBundleComponent;
 import org.osgi.framework.Bundle;
 
 /**
- * Builds a Dependency Manager Bundle Dependency. The Dependency is required by default (unlike in the original Dependency Manager API).
+ * Builds a Dependency Manager Bundle Dependency. 
  * 
- * <p> Example of a Component which tracks a started bundle having a given bundle symbolic name:
+ * <p> Example of a Pojo Component which tracks a started bundle having a given bundle symbolic name:
  * 
  * <pre> {@code
  * public class Activator extends DependencyManagerActivator {
- *     public void activate() throws Exception { 
+ *     public void init(BundleContext ctx, DependencyManager dm) throws Exception { 
  *         String BSN = "org.apache.felix.dependencymanager";
  *         component(comp -> comp
- *             .impl(MyComponent.class)
- *             .withBundle(b -> b.mask(Bundle.ACTIVE).filter("(Bundle-SymbolicName=" + BSN + ")").cb(MyComponent::add, MyComponent::remove)));
- *                  
+ *             .impl(Pojo.class)
+ *             .withBundle(b -> b.mask(Bundle.ACTIVE).filter("(Bundle-SymbolicName=" + BSN + ")").add(Pojo::add).remove(Pojo::remove)));
  *    }
  * }
  * } </pre>
@@ -31,7 +48,7 @@ import org.osgi.framework.Bundle;
  */
 public interface BundleDependencyBuilder extends DependencyBuilder<BundleDependency> {
     /**
-     * Enables auto configuration for this dependency. This means the component implementation (composition) will be
+     * Enables auto configuration for this dependency. This means the component implementation class fields will be
      * injected with this bundle dependency automatically.
      * 
      * @param autoConfig <code>true</code> to enable auto configuration
@@ -40,7 +57,7 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
     public BundleDependencyBuilder autoConfig(boolean autoConfig);
 
     /**
-     * Enables auto configuration for this dependency. This means the component implementation (composition) will be
+     * Enables auto configuration for this dependency. This means the component implementation class fields will be
      * injected with this bundle dependency automatically.
      * 
      * @return the bundle dependency builder
@@ -48,9 +65,8 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
     public BundleDependencyBuilder autoConfig();
 
     /**
-     * Sets the dependency to be required. By default, the dependency is required.
-     * 
-     * @param required <code>true</code> if this bundle dependency is required (true by default).
+     * Sets the dependency to be required.
+     * @param required <code>true</code> if this bundle dependency is required.
      * @return the bundle dependency builder
      */
     public BundleDependencyBuilder required(boolean required);
@@ -61,6 +77,13 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
      * @return the bundle dependency builder
      */
     public BundleDependencyBuilder required();
+
+    /**
+     * Sets the dependency to be optional.
+     * 
+     * @return the bundle dependency builder
+     */
+    public BundleDependencyBuilder optional();
 
     /**
      * Sets the bundle to depend on directly.
@@ -89,7 +112,7 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
 
     /**
      * Sets property propagation. If set to <code>true</code> any bundle manifest properties will be added
-     * to the service properties of the component that has this dependency (if it registers as a service).
+     * to the service properties of the component that declares this dependency (if it provides a service).
      * 
      * @param propagate <code>true</code> to propagate the bundle manifest properties
      * @return the bundle dependency builder
@@ -107,9 +130,9 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
     /**
      * Sets an Object instance and a callback method used to propagate some properties to the provided service properties.
      * The method will be invoked on the specified object instance and must have one of the following signatures:
-     * <ul><li>Dictionary callback(ServiceReference, Object service) 
-     * <li>Dictionary callback(ServiceReference)
-     * </ul>
+     * 
+     * <p><ul><li>Dictionary callback(Bundle bundle)</ul>
+     * 
      * @param instance the Object instance which is used to retrieve propagated service properties 
      * @param method the method to invoke for retrieving the properties to be propagated to the service properties.
      * @return this service dependency. builder
@@ -117,163 +140,176 @@ public interface BundleDependencyBuilder extends DependencyBuilder<BundleDepende
     public BundleDependencyBuilder propagate(Object instance, String method);
     
     /**
-     * Sets an Object instance and a callback method used to propagate some properties to the provided service properties.
-     * The method will be invoked on the specified object instance and must have one of the following signatures:
-     * <ul><li>Dictionary callback(ServiceReference, Object service) 
-     * <li>Dictionary callback(ServiceReference)
-     * </ul>
-     * @param instance the Object instance which is used to retrieve propagated service properties 
+     * Sets a reference to a method on an Object instance used to propagate some bundle properties to the provided service properties.
+     * 
+     * @param propagate a function which accepts a Bundle argument and which returns some properties that will be
+     * propagated to the provided component service properties. 
      * @return this service dependency. builder
      */
-    public BundleDependencyBuilder propagate(Supplier<Dictionary<?, ?>> instance);
+    public BundleDependencyBuilder propagate(Function<Bundle, Dictionary<?, ?>> propagate);
 
     /**
-     * Sets some <code>callback</code> methods to invoke on the component instance(s). When a bundle state matches the bundle 
-     * filter, then the bundle is injected using the specified callback methods. When you specify one callback, it stands for the "add" callback.
-     * When you specify two callbacks, the first one corresponds to the "add" callback, and the second one to the "remove" callback. When you specify three
-     * callbacks, the first one stands for the "add" callback, the second one for the "change" callback, and the third one for the "remove" callback.
+     * Sets a "add" <code>callback</code> method to invoke on the component implementation instance(s).
+     * The callback is invoked when the bundle is added, and the following signatures are supported:
      * 
-     * @param callbacks a list of callbacks (1 param: "add", 2 params: "add"/remove", 3 params: "add"/"change"/"remove" callbacks).
+     * <p><ol>
+     * <li>method(Bundle)</li>
+     * <li>method(Component, Bundle)</li>
+     * </ol>
+     * 
+     * @param callback the add callback
      * @return this builder
      */
-    BundleDependencyBuilder cb(String ... callbacks);
+    BundleDependencyBuilder add(String callback);
     
     /**
-     * Sets some <code>callback instance</code> methods to invoke on a given Object instance. When a bundle state matches the bundle 
-     * filter, then the bundle is injected using the specified callback methods. When you specify one callback, it stands for the "add" callback.
-     * When you specify two callbacks, the first one corresponds to the "add" callback, and the second one to the "remove" callback. 
-     * When you specify three callbacks, the first one stands for the "add" callback, the second one for the "change" callback, and the third one for 
-     * the "remove" callback.
+     * Sets a "change" <code>callback</code> method to invoke on the component implementation instance(s). 
+     * The callback is invoked when the bundle state has changed, and the following signatures are supported:
      * 
-     * @param callbackInstance the Object instance where the callbacks are invoked on
-     * @param callbacks a list of callbacks (1 param: "add", 2 params: "add/remove", 3 params: "add/change/remove" callbacks).
+     * <p><ol>
+     * <li>method(Bundle)</li>
+     * <li>method(Component, Bundle)</li>
+     * </ol>
+     * 
+     * @param callback the change callback
      * @return this builder
      */
-    BundleDependencyBuilder cb(Object callbackInstance, String ... callbacks);
+    BundleDependencyBuilder change(String callback);
+    
+    /**
+     * Sets a "remove" <code>callback</code> method to invoke on the component implementation instance(s). 
+     * The callback is invoked when the bundle is removed, and the following signatures are supported:
+     * <p><ol>
+     * <li>method(Bundle)</li>
+     * <li>method(Component, Bundle)</li>
+     * </ol>
+     * 
+     * @param callback the remove callback
+     * @return this builder
+     */
+    BundleDependencyBuilder remove(String callback);
+    
+    /**
+     * Specifies a callback instance used to invoke the reflection based callbacks on it.
+     * @param callbackInstance the instance to invoke the reflection based callbacks on
+     * @return this builder
+     * @see #add(String)
+     * @see #change(String)
+     * @see #remove(String)
+     */
+    BundleDependencyBuilder callbackInstance(Object callbackInstance);
 
     /**
      * Sets a <code>callback</code> method reference which is invoked when a bundle is added.
-     * The method reference must point to a Component implementation class method, and take as argument a Bundle.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle.
      * 
      * @param <T> the type of the component implementation class on which the callback is invoked on.
      * @param add the method reference invoked when a bundle is added.
      * @return this builder
      */
-    <T> BundleDependencyBuilder cb(CbTypeBundle<T> add);
-    
+    <T> BundleDependencyBuilder add(CbBundle<T> add);
+        
     /**
-     * Sets some <code>callback</code> method references which are invoked when a bundle is added, or removed.
-     * The method references must point to a Component implementation class method, and take as argument a Bundle.
+     * Sets a <code>callback</code> method reference which is invoked when a bundle is changed.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle.
      * 
      * @param <T> the type of the component implementation class on which the callback is invoked on.
-     * @param add the method reference invoked when a bundle is added.
-     * @param remove the method reference invoked when a bundle is removed.
-     * @return this builder
-     */
-    <T> BundleDependencyBuilder cb(CbTypeBundle<T> add, CbTypeBundle<T> remove);
-    
-    /**
-     * Sets some <code>callback</code> method references which are invoked when a bundle is added, changed or removed.
-     * The method references must point to a Component implementation class method, and take as argument a Bundle.
-     * 
-     * @param <T> the type of the component implementation class on which the callback is invoked on.
-     * @param add the method reference invoked when a bundle is added.
      * @param change the method reference invoked when a bundle has changed.
+     * @return this builder
+     */
+    <T> BundleDependencyBuilder change(CbBundle<T> change);
+    
+    /**
+     * Sets a <code>callback</code> method reference which is invoked when a bundle is removed.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle.
+     * 
+     * @param <T> the type of the component implementation class on which the callback is invoked on.
      * @param remove the method reference invoked when a bundle is removed.
      * @return this builder
      */
-    <T> BundleDependencyBuilder cb(CbTypeBundle<T> add, CbTypeBundle<T> change, CbTypeBundle<T> remove);
-    
+    <T> BundleDependencyBuilder remove(CbBundle<T> remove);
+
     /**
      * Sets a <code>callback</code> method reference which is invoked when a bundle is added.
-     * The method reference must point to a Component implementation class method, and take as argument a Component and a Bundle.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle and a Component.
      * 
      * @param <T> the type of the component implementation class on which the callback is invoked on.
      * @param add the method reference invoked when a bundle is added.
      * @return this builder
      */
-    <T> BundleDependencyBuilder cb(CbTypeComponentBundle<T> add); 
+    <T> BundleDependencyBuilder add(CbBundleComponent<T> add); 
     
     /**
-     * Sets some <code>callback</code> method references which are invoked when a bundle is added, or removed.
-     * The method references must point to a Component implementation class method, and take as argument a Component and a Bundle.
+     * Sets a <code>callback</code> method reference which is invoked when a bundle is changed.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle and a Component.
      * 
      * @param <T> the type of the component implementation class on which the callback is invoked on.
-     * @param add the method reference invoked when a bundle is added.
-     * @param remove the method reference invoked when a bundle is removed.
-     * @return this builder
-     */
-    <T> BundleDependencyBuilder cb(CbTypeComponentBundle<T> add, CbTypeComponentBundle<T> remove); 
-    
-    /**
-     * Sets some <code>callback</code> method references which are invoked when a bundle is added, changed or removed.
-     * The method references must point to a Component implementation class method, and take as argument a Component and a Bundle.
-     * 
-     * @param <T> the type of the component implementation class on which the callback is invoked on.
-     * @param add the method reference invoked when a bundle is added.
      * @param change the method reference invoked when a bundle has changed.
-     * @param remove the method reference invoked when a bundle is removed.
      * @return this builder
      */
-    <T> BundleDependencyBuilder cb(CbTypeComponentBundle<T> add, CbTypeComponentBundle<T> change, CbTypeComponentBundle<T> remove); 
+    <T> BundleDependencyBuilder change(CbBundleComponent<T> change); 
  
     /**
-     * Sets a <code>callback instance</code> method reference which is invoked when a bundle is added. 
+     * Sets a <code>callback</code> method reference which is invoked when a bundle is removed.
+     * The method reference must point to a Component implementation class method, and takes as argument a Bundle and a Component.
+     * 
+     * @param <T> the type of the component implementation class on which the callback is invoked on.
+     * @param remove the method reference invoked when a bundle is removed.
+     * @return this builder
+     */
+    <T> BundleDependencyBuilder remove(CbBundleComponent<T> remove); 
+    
+    /**
+     * Sets a method reference on an Object instance which is invoked when a bundle is added. 
      * The method reference must point to an Object instance method, and takes as argument a Bundle parameter.
      * 
      * @param add the method reference invoked when a bundle is added.
      * @return this builder
      */
-    BundleDependencyBuilder cbi(CbBundle add);
+    BundleDependencyBuilder add(InstanceCbBundle add);
     
     /**
-     * Sets some <code>callback instance</code> method references which are invoked when a bundle is added or removed. 
-     * The method references must point to an Object instance method, and take as argument a Bundle parameter.
+     * Sets a method reference on an Object instance which is invoked when a bundle is changed. 
+     * The method reference must point to an Object instance method, and takes as argument a Bundle parameter.
      * 
-     * @param add the method reference invoked when a bundle is added.
+     * @param change the method reference invoked when a bundle is changed.
+     * @return this builder
+     */
+    BundleDependencyBuilder change(InstanceCbBundle change);
+    
+    /**
+     * Sets a method reference on an Object instance which is invoked when a bundle is removed. 
+     * The method reference must point to an Object instance method, and takes as argument a Bundle parameter.
+     * 
      * @param remove the method reference invoked when a bundle is removed.
      * @return this builder
      */
-    BundleDependencyBuilder cbi(CbBundle add, CbBundle remove);
-    
-    /**
-     * Sets some <code>callback instance</code> method references which are invoked when a bundle is added, changed or removed.
-     * The method references must point to an Object instance method, and take as argument a Bundle parameter.
-     * 
-     * @param add the method reference invoked when a bundle is added.
-     * @param change the method reference invoked when a bundle has changed.
-     * @param remove the method reference invoked when a bundle is removed.
-     * @return this builder
-     */
-    BundleDependencyBuilder cbi(CbBundle add, CbBundle change, CbBundle remove);
+    BundleDependencyBuilder remove(InstanceCbBundle remove);
 
     /**
      * Sets a <code>callback instance</code> method reference which is invoked when a bundle is added. 
-     * The method reference must point to an Object instance method, and takes as arguments a Component and a Bundle.
+     * The method reference must point to an Object instance method, and takes as arguments a Bundle and a Component.
      * 
      * @param add the method reference invoked when a bundle is added.
      * @return this builder
      */
-    BundleDependencyBuilder cbi(CbComponentBundle add);
+    BundleDependencyBuilder add(InstanceCbBundleComponent add);
     
     /**
-     * Sets some <code>callback instance</code> method references which are invoked when a bundle is added or removed. 
-     * The method references must point to an Object instance method, and take as argument a Component and a Bundle.
+     * Sets a <code>callback instance</code> method reference which is invoked when a bundle is changed. 
+     * The method reference must point to an Object instance method, and takes as argument a Bundle and a Component.
      * 
-     * @param add the method reference invoked when a bundle is added.
+     * @param change the method reference invoked when a bundle is changed.
+     * @return this builder
+     */
+    BundleDependencyBuilder change(InstanceCbBundleComponent change);
+    
+    /**
+     * Sets a <code>callback instance</code> method reference which is invoked when a bundle is removed. 
+     * The method reference must point to an Object instance method, and takes as argument a Bundle and a Component.
+     * 
      * @param remove the method reference invoked when a bundle is removed.
      * @return this builder
      */
-    BundleDependencyBuilder cbi(CbComponentBundle add, CbComponentBundle remove);
-    
-    /**
-     * Sets some <code>callback instance</code> method references which are invoked when a bundle is added, changed or removed.
-     * The method references must point to an Object instance method, and take as argument a Component and a Bundle.
-     * 
-     * @param add the method reference invoked when a bundle is added.
-     * @param change the method reference invoked when a bundle has changed.
-     * @param remove the method reference invoked when a bundle is removed.
-     * @return this builder
-     */
-    BundleDependencyBuilder cbi(CbComponentBundle add, CbComponentBundle change, CbComponentBundle remove);    
+    BundleDependencyBuilder remove(InstanceCbBundleComponent remove);    
 }

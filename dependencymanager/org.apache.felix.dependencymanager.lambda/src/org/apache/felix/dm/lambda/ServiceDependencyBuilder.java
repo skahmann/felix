@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.felix.dm.lambda;
 
 import java.util.Dictionary;
@@ -8,11 +26,24 @@ import org.apache.felix.dm.ServiceDependency;
 import org.osgi.framework.ServiceReference;
 
 /**
- * Builds a Dependency Manager Service Dependency. Dependency callbacks can be defined using methods reflection like 
- * in original DM API, or using Java8 method references.
+ * Builds a Dependency Manager Service Dependency. 
+ * <p> Sample code:
  * 
- * Unlike with original DM, dependencies are required by default.
- *
+ * <pre> {@code
+ * public class Activator extends DependencyManagerActivator {
+ *    public void init(BundleContext ctx, DependencyManager dm) throws Exception {
+ *       component(comp -> comp
+ *          .impl(Pojo.class)
+ *          .withSvc(ConfigurationAdmin.class, LogService.class) // varargs of optional (possibly NullObjects) dependencies injected in compatible class fields
+ *          .withSvc(true, Coordinator.class, LogService.class) // varargs of required dependencies injected in compatible class fields
+ *          .withSvc(ConfigurationAdmin.class, "(vendor=apache)") // service with a filter, injected in compatible class fields
+ *          .withSvc(ConfigurationAdmin.class, "(vendor=apache)", true) // required service with a filter, injected in compatible class fields
+ *          .withSvc(ConfigurationAdmin.class, "(vendor=apache)", true, "field") // required service with a filter, injected in a given class field name
+ *          .withSvc(HttpService.class, svc -> svc.required().add(Pojo::setHttpService)) // required dependency injected using a method reference
+ *          .withSvc(Tracked.class, svc -> svc.optional().add(Pojo::addTracked)) // optional dependency, injected using method ref, after the start() callback
+ *    }
+ * }}</pre>
+ * 
  * @param <S> the type of the service dependency
  */
 public interface ServiceDependencyBuilder<S> extends DependencyBuilder<ServiceDependency>, ServiceCallbacksBuilder<S, ServiceDependencyBuilder<S>> {
@@ -31,13 +62,13 @@ public interface ServiceDependencyBuilder<S> extends DependencyBuilder<ServiceDe
     ServiceDependencyBuilder<S> ref(ServiceReference<S> ref);
     
     /**
-     * Configures this dependency as optional. By default, a dependency is required.
+     * Configures this dependency as optional.
      * @return this builder
      */
     ServiceDependencyBuilder<S> optional();
 
     /**
-     * Configures this dependency as required. By default, a dependency is required.
+     * Configures this dependency as required.
 	 * @return this builder
      */
     ServiceDependencyBuilder<S> required();
@@ -45,7 +76,7 @@ public interface ServiceDependencyBuilder<S> extends DependencyBuilder<ServiceDe
     /**
      * Configures whether this dependency is required or not.
      * 
-     * @param required true if the dependency is required, false if not. Unlike with the original DM API, service dependencies are required by default.
+     * @param required true if the dependency is required, false if not.
 	 * @return this builder
      */
     ServiceDependencyBuilder<S> required(boolean required);
@@ -102,7 +133,7 @@ public interface ServiceDependencyBuilder<S> extends DependencyBuilder<ServiceDe
     ServiceDependencyBuilder<S> defImpl(Object defaultImpl);
     
     /**
-     * Sets a timeout for this dependency. A timed dependency blocks the invoker thread is the required dependency is currently unavailable, until it comes up again.
+     * Sets a timeout for this dependency. A timed dependency blocks the invoker thread if the required dependency is currently unavailable, until it comes up again.
      * @param timeout the timeout to wait in milliseconds when the service disappears. If the timeout expires, an IllegalStateException is thrown
      * when the missing service is invoked.
      * 

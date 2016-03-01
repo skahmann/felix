@@ -18,8 +18,7 @@
  */
 package org.apache.felix.dependencymanager.samples.hello.api;
 
-import java.util.Dictionary;
-
+import org.osgi.service.cm.ConfigurationException;
 import org.osgi.service.log.LogService;
 
 /**
@@ -30,13 +29,14 @@ import org.osgi.service.log.LogService;
 public class ServiceConsumer {
     volatile ServiceProvider service;
     volatile LogService log;
-    Dictionary<?, ?> conf;
-
-    protected void update(Dictionary<?, ?> conf) {
+    ServiceConsumerConf conf;
+    
+    protected void updated(ServiceConsumerConf conf) throws ConfigurationException {
         this.conf = conf;
     }
 
     public void start() {
+        log.log(LogService.LOG_WARNING, "ServiceConsumer.start: configured key = " + conf.getKey());
         log.log(LogService.LOG_WARNING, "ServiceConsumer.start: calling service.hello()");
         this.service.hello();
     }

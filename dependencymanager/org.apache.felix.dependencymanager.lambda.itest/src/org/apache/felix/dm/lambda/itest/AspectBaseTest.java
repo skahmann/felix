@@ -41,11 +41,11 @@ public class AspectBaseTest extends TestBase {
         Ensure e = new Ensure();
         
         // create a service provider and consumer
-        ServiceProvider p = new ServiceProvider(e, "a");
+        ServiceProvider p = new ServiceProvider("a");
         ServiceConsumer c = new ServiceConsumer(e);
         
         Component sp = component(m).impl(p).provides(ServiceInterface.class).properties(name -> "a").build();
-        Component sc = component(m).impl(c).withSrv(ServiceInterface.class, srv -> srv.cb("add", "remove").autoConfig("m_service")).build();
+        Component sc = component(m).impl(c).withSvc(ServiceInterface.class, srv -> srv.add("add").remove("remove").autoConfig("m_service")).build();
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
             
         m.add(sc);
@@ -76,12 +76,12 @@ public class AspectBaseTest extends TestBase {
         Ensure e = new Ensure();
         
         // create a service provider and consumer
-        ServiceProvider p = new ServiceProvider(e, "a");
+        ServiceProvider p = new ServiceProvider("a");
         ServiceConsumer c = new ServiceConsumer(e);
         
         Component sp = component(m).impl(p).provides(ServiceInterface.class).properties(name -> "a").build();        
         Component sc = component(m)
-            .impl(c).withSrv(ServiceInterface.class, srv -> srv.cbi(c::add, c::remove).autoConfig("m_service")).build();
+            .impl(c).withSvc(ServiceInterface.class, srv -> srv.add(c::addRef).remove(c::removeRef).autoConfig("m_service")).build();
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
         
         m.add(sc);
@@ -106,17 +106,16 @@ public class AspectBaseTest extends TestBase {
         clearComponents();
     }
     
-    @SuppressWarnings("serial")
     public void testSingleAspectThatAlreadyExisted() {
         DependencyManager m = new DependencyManager(context);
         // helper class that ensures certain steps get executed in sequence
         Ensure e = new Ensure();
         
         // create a service provider and consumer
-        ServiceProvider p = new ServiceProvider(e, "a");
+        ServiceProvider p = new ServiceProvider("a");
         ServiceConsumer c = new ServiceConsumer(e);
         Component sp = component(m).impl(p).provides(ServiceInterface.class).properties(name -> "a").build();            
-        Component sc = component(m).impl(c).withSrv(ServiceInterface.class, srv -> srv.cb("add", "remove").autoConfig("m_service")).build();
+        Component sc = component(m).impl(c).withSvc(ServiceInterface.class, srv -> srv.add("add").remove("remove").autoConfig("m_service")).build();
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
 
         // we first add the aspect
@@ -154,11 +153,11 @@ public class AspectBaseTest extends TestBase {
         Ensure e = new Ensure();
         
         // create a service provider and consumer
-        ServiceProvider p = new ServiceProvider(e, "a");
+        ServiceProvider p = new ServiceProvider("a");
         ServiceConsumer c = new ServiceConsumer(e);
         
         Component sp = component(m).impl(p).provides(ServiceInterface.class).properties(name -> "a").build();
-        Component sc = component(m).impl(c).withSrv(ServiceInterface.class, srv -> srv.cbi(c::add, c::remove).autoConfig("m_service")).build();
+        Component sc = component(m).impl(c).withSvc(ServiceInterface.class, srv -> srv.add(c::addRef).remove(c::removeRef).autoConfig("m_service")).build();
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
 
         // we first add the aspect
@@ -197,9 +196,9 @@ public class AspectBaseTest extends TestBase {
         
         // create service providers and consumers
         ServiceConsumer c = new ServiceConsumer(e);
-        Component sp = component(m).impl(new ServiceProvider(e, "a")).provides(ServiceInterface.class).properties(name -> "a").build();
-        Component sp2 = component(m).impl(new ServiceProvider(e, "b")).provides(ServiceInterface.class).properties(name -> "b").build();
-        Component sc = component(m).impl(c).withSrv(ServiceInterface.class, srv -> srv.cb("add", "remove")).build();
+        Component sp = component(m).impl(new ServiceProvider("a")).provides(ServiceInterface.class).properties(name -> "a").build();
+        Component sp2 = component(m).impl(new ServiceProvider("b")).provides(ServiceInterface.class).properties(name -> "b").build();
+        Component sc = component(m).impl(c).withSvc(ServiceInterface.class, srv -> srv.add("add").remove("remove")).build();
 
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
         Component sa2 = aspect(m, ServiceInterface.class).rank(10).impl(ServiceAspect.class).build();
@@ -239,9 +238,9 @@ public class AspectBaseTest extends TestBase {
         
         // create service providers and consumers
         ServiceConsumer c = new ServiceConsumer(e);
-        Component sp = component(m).impl(new ServiceProvider(e, "a")).provides(ServiceInterface.class).properties(name -> "a").build();
-        Component sp2 = component(m).impl(new ServiceProvider(e, "b")).provides(ServiceInterface.class).properties(name -> "b").build();
-        Component sc = component(m).impl(c).withSrv(ServiceInterface.class, srv -> srv.cbi(c::add, c::remove)).build();
+        Component sp = component(m).impl(new ServiceProvider("a")).provides(ServiceInterface.class).properties(name -> "a").build();
+        Component sp2 = component(m).impl(new ServiceProvider("b")).provides(ServiceInterface.class).properties(name -> "b").build();
+        Component sc = component(m).impl(c).withSvc(ServiceInterface.class, srv -> srv.add(c::addRef).remove(c::removeRef)).build();
 
         Component sa = aspect(m, ServiceInterface.class).rank(20).impl(ServiceAspect.class).build();
         Component sa2 = aspect(m, ServiceInterface.class).rank(10).impl(ServiceAspect.class).build();
@@ -279,10 +278,8 @@ public class AspectBaseTest extends TestBase {
     }
     
     public static class ServiceProvider implements ServiceInterface {
-        private final Ensure m_ensure;
         private final String m_name;
-        public ServiceProvider(Ensure e, String name) {
-            m_ensure = e;
+        public ServiceProvider(String name) {
             m_name = name;
         }
         public String invoke(String input) {
@@ -292,7 +289,7 @@ public class AspectBaseTest extends TestBase {
     
     public static class ServiceAspect implements ServiceInterface {
         private volatile ServiceInterface m_originalService;
-        private volatile ServiceRegistration m_registration;
+        private volatile ServiceRegistration<?> m_registration;
         
         public String invoke(String input) {
             String result = m_originalService.invoke(input);
@@ -310,13 +307,21 @@ public class AspectBaseTest extends TestBase {
             m_ensure = e;
         }
         
-        public void add(ServiceReference<ServiceInterface> ref, ServiceInterface si) {
+        public void addRef(ServiceInterface si, ServiceReference<ServiceInterface> ref) { // method ref callback
+            add(ref, si);
+        }
+        
+        public void add(ServiceReference<ServiceInterface> ref, ServiceInterface si) { // reflection callback
             System.out.println("add: " + ServiceUtil.toString(ref));
             m_services.add(si);
             m_ensure.step();
         }
         
-        public void remove(ServiceReference<ServiceInterface> ref, ServiceInterface si) {
+        public void removeRef(ServiceInterface si, ServiceReference<ServiceInterface> ref) { // method ref callback
+            remove(ref, si);
+        }
+        
+        public void remove(ServiceReference<ServiceInterface> ref, ServiceInterface si) { // reflection callback
             System.out.println("rem: " + ServiceUtil.toString(ref));
             m_services.remove(si);
             m_ensure.step();

@@ -1,3 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
 package org.apache.felix.dm.lambda;
 
 import java.util.concurrent.CompletableFuture;
@@ -27,11 +45,11 @@ import org.osgi.framework.BundleContext;
  * import org.apache.felix.dm.lambda.DependencyManagerActivator;
  *
  * public class Activator extends DependencyManagerActivator {    
- *     public void activate() throws Exception {
+ *     public void init(BundleContext ctx, DependencyManager dm) throws Exception {
  *         component(comp -> comp
  *             .provides(Service.class, property -> "value")
  *             .impl(ServiceImpl.class)            
- *             .withSrv(LogService.class, ConfigurationAdmni.class) // both services are required and injected in class fields with compatible types.           
+ *             .withSvc(LogService.class, ConfigurationAdmni.class) // both services are required and injected in class fields with compatible types.           
  *     }
  * }
  * }</pre>
@@ -42,12 +60,12 @@ import org.osgi.framework.BundleContext;
  * import org.apache.felix.dm.lambda.DependencyManagerActivator;
  *
  * public class Activator extends DependencyManagerActivator {    
- *     public void activate() throws Exception {
+ *     public void init(BundleContext ctx, DependencyManager dm) throws Exception {
  *         component(comp -> comp
  *             .provides(Service.class, property -> "value")
  *             .impl(ServiceImpl.class)            
- *             .withSrv(LogService.class, log -> log.cb("setLog"))              
- *             .withSrv(ConfigurationAdmni.class, cm -> cm.cb("setConfigAdmin")))                
+ *             .withSvc(LogService.class, svc -> svc.add("setLog"))              
+ *             .withSvc(ConfigurationAdmni.class, svc -> svc.add("setConfigAdmin")))                
  *     }
  * }
  * }</pre>
@@ -58,15 +76,20 @@ import org.osgi.framework.BundleContext;
  * import org.apache.felix.dm.lambda.DependencyManagerActivator;
  *
  * public class Activator extends DependencyManagerActivator {    
- *     public void activate() throws Exception {
+ *     public void init(BundleContext ctx, DependencyManager dm) throws Exception {
  *         component(comp -> comp
  *             .provides(Service.class, property -> "value")
  *             .impl(ServiceImpl.class)            
- *             .withSrv(LogService.class, log -> log.cb(ServiceImpl::setLog))              
- *             .withSrv(ConfigurationAdmni.class, cm -> cm.cb(ServiceImpl::setConfigAdmin)))                
+ *             .withSvc(LogService.class, svc -> svc.add(ServiceImpl::setLog))              
+ *             .withSvc(ConfigurationAdmni.class, svc -> svc.add(ServiceImpl::setConfigAdmin)))                
  *     }
  * }
  * }</pre>
+ * 
+ * When a dependency is not explicitly defined as "required" or "optional", 
+ * then it is assumed to be optional by default, like it is the case with the original DM API.
+ * You can change the default mode using the "org.apache.felix.dependencymanager.lambda.defaultRequiredDependency system property"
+ * (see Felix dm-lambda online documentation).
  */
 public abstract class DependencyManagerActivator implements BundleActivator {    
 	/**
@@ -80,7 +103,7 @@ public abstract class DependencyManagerActivator implements BundleActivator {
     @Override
     public void start(BundleContext context) throws Exception {
         m_manager = new DependencyManager(context);
-        activate();
+        init(context, m_manager);
     }
 
     /**
@@ -88,21 +111,22 @@ public abstract class DependencyManagerActivator implements BundleActivator {
      */
     @Override
     public void stop(BundleContext context) throws Exception {
-        deactivate();
+        destroy();
     }
 
     /**
      * Sub classes must override this method in order to build some DM components.
-     * 
+     * @param ctx the context associated to the bundle
+     * @param dm the DependencyManager assocaited to this activator
      * @throws Exception if the activation fails
      */
-    protected abstract void activate() throws Exception;
+    protected abstract void init(BundleContext ctx, DependencyManager dm) throws Exception;
 
     /**
      * Sub classes may override this method that is called when the Activator is stopped.
      * @throws Exception if the deactivation fails
      */
-    protected void deactivate() throws Exception {
+    protected void destroy() throws Exception {
     }
     
     /**
